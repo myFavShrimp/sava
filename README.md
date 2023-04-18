@@ -70,3 +70,8 @@ Contributions to sava-chain are welcome and encouraged! If you would like to con
 ## 📝 License
 
 This project is licensed under the **MIT License**.
+
+
+---
+
+Disclaimer: This README was generated using ChatGPT. The crate author acknowledges their own limitations and laziness, and advises that this README should not be solely relied upon for accuracy or completeness.
