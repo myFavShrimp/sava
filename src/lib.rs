@@ -4,14 +4,16 @@ pub type SanitizerFn<T> = fn(&T) -> T;
 pub type ValidatorFn<T> = fn(&T) -> bool;
 
 pub enum Link<T, E>
-where E: Error,
+where
+    E: Error,
 {
     Sa(SanitizerFn<T>),
     Va(ValidatorFn<T>, E),
 }
 
 pub trait Chain<T, E>
-where E: Error,
+where
+    E: Error,
 {
     fn chain() -> Vec<Link<T, E>>;
 
@@ -22,7 +24,7 @@ where E: Error,
             match link {
                 Link::Sa(sanitizer) => chain_data = sanitizer(&chain_data),
                 Link::Va(validator, error) => match validator(&chain_data) {
-                    true => {},
+                    true => {}
                     false => return Err(error),
                 },
             }
@@ -99,7 +101,7 @@ mod tests {
 
         assert_eq!(sava_result.unwrap_err(), SomeError::Error2);
     }
-    
+
     #[test]
     fn input_same_as_sanitized() {
         let test_data = SomeData("a nice string b".to_owned());
