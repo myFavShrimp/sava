@@ -10,13 +10,6 @@ sava-chain is a Rust crate for building customizable data validation and sanitiz
 
 ## 🚀 Getting Started
 
-Add `sava-chain` to your Cargo.toml dependencies
-
-```toml
-[dependencies]
-sava-chain = "0.1"
-```
-
 Define your custom error and your data validation and sanitization links:
 
 ```rust
