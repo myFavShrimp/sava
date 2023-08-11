@@ -11,6 +11,7 @@ proc-macro = true
 [dependencies]
 sava-chain = { path = "../sava-chain" }
 quote = "1"
+proc-macro2 = "1"
 
 [dependencies.syn]
 version = "2.0.0"

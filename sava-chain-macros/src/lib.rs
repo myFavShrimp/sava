@@ -1,4 +1,5 @@
 use proc_macro::TokenStream;
+use proc_macro2::TokenStream as TokenStream2;
 use syn::{parenthesized, parse::Parse, parse_macro_input, ExprClosure, Ident, Token};
 
 struct Chaining {
@@ -35,6 +36,14 @@ impl Parse for Chaining {
     }
 }
 
+impl Chaining {
+    pub fn to_chain_exec(self) -> TokenStream2 {
+        quote::quote! {
+            const _: i8 = 12;
+        }
+    }
+}
+
 struct Chainings(Vec<Chaining>);
 
 impl Parse for Chainings {
@@ -53,8 +62,11 @@ impl Parse for Chainings {
 pub fn chaining(input: TokenStream) -> TokenStream {
     let Chainings(chainings) = parse_macro_input!(input as Chainings);
 
-    quote::quote! {
-        const _: i8 = 15;
+    let mut result = TokenStream2::new();
+
+    for chaining in chainings {
+        result.extend(chaining.to_chain_exec());
     }
-    .into()
+
+    result.into()
 }
