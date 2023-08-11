@@ -140,6 +140,10 @@ impl Chaining {
             impl ::sava_chain::ChainExec for #name {
                 type Type = #to_validate;
                 type Error = #error;
+
+                fn execute(input: Self::Type) -> Result<Self::Type, Self::Error> {
+
+                }
             }
         }
     }
