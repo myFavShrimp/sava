@@ -62,7 +62,7 @@ mod tests {
     #[test]
     fn basic_error() {
         let to_validate = ToValidate {
-            my_data: String::from("a"),
+            my_data: String::from("a   "),
         };
 
         let result = MyValidator::execute(to_validate);
