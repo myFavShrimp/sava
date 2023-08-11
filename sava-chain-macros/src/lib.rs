@@ -54,6 +54,8 @@ impl ChainingValidator {
 
 struct Chaining {
     to_validate: Ident,
+    error: Ident,
+    name: Ident,
     validators: Vec<ChainingValidator>,
 }
 
@@ -61,7 +63,19 @@ impl Parse for Chaining {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let mut validators = Vec::new();
 
-        let to_validate: Ident = input.parse()?;
+        let (to_validate, error) = {
+            let to_validate_error_pair;
+            parenthesized!(to_validate_error_pair in input);
+
+            let to_validate: Ident = to_validate_error_pair.parse()?;
+            to_validate_error_pair.parse::<Token![,]>()?;
+            let error: Ident = to_validate_error_pair.parse()?;
+
+            (to_validate, error)
+        };
+
+        input.parse::<Token![=>]>()?;
+        let name: Ident = input.parse()?;
         input.parse::<Token![:]>()?;
 
         let inner;
@@ -77,6 +91,8 @@ impl Parse for Chaining {
 
         Ok(Self {
             to_validate,
+            error,
+            name,
             validators,
         })
     }
@@ -86,9 +102,10 @@ impl Chaining {
     pub fn chaining_impl(&self) -> TokenStream2 {
         let Chaining {
             to_validate,
+            error: _,
+            name,
             validators,
         } = self;
-        let chaining_ident = Ident::new(&format!("{}Validator", to_validate), Span::call_site());
         let return_type: Vec<TokenStream2> = validators
             .into_iter()
             .map(|valdator| ChainingValidator::chaining_return_type_part(valdator, to_validate))
@@ -100,8 +117,8 @@ impl Chaining {
             .collect();
 
         quote::quote! {
-            struct #chaining_ident;
-            impl #chaining_ident {
+            struct #name;
+            impl #name {
                 pub fn chaining() -> (#(#return_type),*) {
                     (
                         #(#return_value),*
