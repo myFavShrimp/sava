@@ -93,13 +93,14 @@ impl Parse for Chaining {
 }
 
 impl Chaining {
-    pub fn chain_exec(self) -> TokenStream2 {
+    pub fn chain_exec(&self) -> TokenStream2 {
         let Chaining {
             to_validate,
             error,
             name,
             validators,
         } = self;
+        let validation = self.validate();
 
         let mut execute = Vec::new();
 
@@ -114,6 +115,8 @@ impl Chaining {
                 type Error = #error;
 
                 fn execute(input: Self::Type) -> Result<Self::Type, Self::Error> {
+                    #validation
+
                     let mut data = input;
 
                     #(#execute)*
@@ -121,6 +124,37 @@ impl Chaining {
                     Ok(data)
                 }
             }
+        }
+    }
+
+    pub fn validate(&self) -> TokenStream2 {
+        let Chaining {
+            to_validate: _,
+            error,
+            name: _,
+            validators,
+        } = self;
+
+        let validator_idents: Vec<&Ident> = validators
+            .iter()
+            .map(|validator| &validator.validator)
+            .collect();
+
+        let assert_error = quote::quote_spanned! {
+            error.span() => struct _AssertError where #error: std::error::Error;
+        };
+
+        let assert_error_from = quote::quote_spanned! {
+            error.span() => struct _AssertErrorFrom
+            where
+                #error: #(
+                    std::convert::From<<#validator_idents as ::sava_chain::ChainExec>::Error>
+                )+*;
+        };
+
+        quote::quote! {
+            #assert_error
+            #assert_error_from
         }
     }
 }
