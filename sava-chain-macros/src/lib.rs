@@ -129,7 +129,19 @@ impl Chaining {
     }
 
     pub fn chain_exec(self) -> TokenStream2 {
-        quote::quote! {}
+        let Chaining {
+            to_validate,
+            error,
+            name,
+            validators,
+        } = self;
+
+        quote::quote! {
+            impl ::sava_chain::ChainExec for #name {
+                type Type = #to_validate;
+                type Error = #error;
+            }
+        }
     }
 }
 
@@ -155,6 +167,7 @@ pub fn chaining(input: TokenStream) -> TokenStream {
 
     for chaining in chainings {
         result.extend(chaining.chaining_impl());
+        result.extend(chaining.chain_exec());
     }
 
     result.into()
