@@ -30,47 +30,20 @@ impl Parse for ChainingValidator {
 }
 
 impl ChainingValidator {
-    pub fn chaining_return_type_part(&self, to_validate: &Ident) -> TokenStream2 {
-        let validator = self.validator.clone();
-
-        quote::quote! {
-            (
-                ::sava_chain::FieldExtractorFn<#to_validate, <#validator as ::sava_chain::ChainExec>::Type>,
-                ::sava_chain::FieldCombinatorFn<<#validator as ::sava_chain::ChainExec>::Type, #to_validate>,
-            )
-        }
-    }
-
-    pub fn chaining_return_part(&self) -> TokenStream2 {
+    pub fn execute_part(&self, index: usize, to_validate: &Ident) -> TokenStream2 {
         let ChainingValidator {
-            validator: _,
+            validator,
             extractor_fn,
             combinator_fn,
         } = self;
 
         quote::quote! {
-            (
-                #extractor_fn,
-                #combinator_fn,
-            )
-        }
-    }
+            let extractor_fn: ::sava_chain::FieldExtractorFn<#to_validate, <#validator as ::sava_chain::ChainExec>::Type> = #extractor_fn;
+            let combinator_fn: ::sava_chain::FieldCombinatorFn<<#validator as ::sava_chain::ChainExec>::Type, #to_validate> = #combinator_fn;
 
-    pub fn execute_part(&self, index: usize) -> TokenStream2 {
-        let ChainingValidator {
-            validator,
-            extractor_fn: _,
-            combinator_fn: _,
-        } = self;
-
-        let index = Index::from(index);
-        let index_zero = Index::from(0);
-        let index_one = Index::from(1);
-
-        quote::quote! {
-            let extracted_field = chainings.#index.#index_zero(&data);
+            let extracted_field = extractor_fn(&data);
             let chain_result = #validator::execute(extracted_field)?;
-            chainings.#index.#index_one(&mut data, chain_result);
+            combinator_fn(&mut data, chain_result);
         }
     }
 }
@@ -122,35 +95,6 @@ impl Parse for Chaining {
 }
 
 impl Chaining {
-    pub fn chaining_impl(&self) -> TokenStream2 {
-        let Chaining {
-            to_validate,
-            error: _,
-            name,
-            validators,
-        } = self;
-        let return_type: Vec<TokenStream2> = validators
-            .into_iter()
-            .map(|valdator| ChainingValidator::chaining_return_type_part(valdator, to_validate))
-            .collect();
-
-        let return_value: Vec<TokenStream2> = validators
-            .into_iter()
-            .map(ChainingValidator::chaining_return_part)
-            .collect();
-
-        quote::quote! {
-            struct #name;
-            impl #name {
-                pub fn chaining() -> (#(#return_type),*,) {
-                    (
-                        #(#return_value),*,
-                    )
-                }
-            }
-        }
-    }
-
     pub fn chain_exec(self) -> TokenStream2 {
         let Chaining {
             to_validate,
@@ -162,17 +106,17 @@ impl Chaining {
         let mut execute = Vec::new();
 
         for (index, validator) in validators.iter().enumerate() {
-            execute.push(validator.execute_part(index));
+            execute.push(validator.execute_part(index, &to_validate));
         }
 
         quote::quote! {
+            pub struct #name;
             impl ::sava_chain::ChainExec for #name {
                 type Type = #to_validate;
                 type Error = #error;
 
                 fn execute(input: Self::Type) -> Result<Self::Type, Self::Error> {
                     let mut data = input;
-                    let chainings = Self::chaining();
 
                     #(#execute)*
 
@@ -204,7 +148,6 @@ pub fn chaining(input: TokenStream) -> TokenStream {
     let mut result = TokenStream2::new();
 
     for chaining in chainings {
-        result.extend(chaining.chaining_impl());
         result.extend(chaining.chain_exec());
     }
 
