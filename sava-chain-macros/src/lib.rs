@@ -1,8 +1,6 @@
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
-use syn::{
-    bracketed, parenthesized, parse::Parse, parse_macro_input, ExprClosure, Ident, Index, Token,
-};
+use syn::{bracketed, parenthesized, parse::Parse, parse_macro_input, ExprClosure, Ident, Token};
 
 struct ChainingValidator {
     extractor_fn: ExprClosure,
@@ -30,7 +28,7 @@ impl Parse for ChainingValidator {
 }
 
 impl ChainingValidator {
-    pub fn execute_part(&self, index: usize, to_validate: &Ident) -> TokenStream2 {
+    pub fn execute_part(&self, to_validate: &Ident) -> TokenStream2 {
         let ChainingValidator {
             validator,
             extractor_fn,
@@ -105,8 +103,8 @@ impl Chaining {
 
         let mut execute = Vec::new();
 
-        for (index, validator) in validators.iter().enumerate() {
-            execute.push(validator.execute_part(index, &to_validate));
+        for validator in validators {
+            execute.push(validator.execute_part(&to_validate));
         }
 
         quote::quote! {
