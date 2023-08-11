@@ -1,6 +1,8 @@
 use proc_macro::TokenStream;
-use proc_macro2::{Span, TokenStream as TokenStream2};
-use syn::{bracketed, parenthesized, parse::Parse, parse_macro_input, ExprClosure, Ident, Token};
+use proc_macro2::TokenStream as TokenStream2;
+use syn::{
+    bracketed, parenthesized, parse::Parse, parse_macro_input, ExprClosure, Ident, Index, Token,
+};
 
 struct ChainingValidator {
     extractor_fn: ExprClosure,
@@ -40,14 +42,35 @@ impl ChainingValidator {
     }
 
     pub fn chaining_return_part(&self) -> TokenStream2 {
-        let extractor_fn = self.extractor_fn.clone();
-        let combinator_fn = self.combinator_fn.clone();
+        let ChainingValidator {
+            validator: _,
+            extractor_fn,
+            combinator_fn,
+        } = self;
 
         quote::quote! {
             (
                 #extractor_fn,
                 #combinator_fn,
             )
+        }
+    }
+
+    pub fn execute_part(&self, index: usize) -> TokenStream2 {
+        let ChainingValidator {
+            validator,
+            extractor_fn: _,
+            combinator_fn: _,
+        } = self;
+
+        let index = Index::from(index);
+        let index_zero = Index::from(0);
+        let index_one = Index::from(1);
+
+        quote::quote! {
+            let extracted_field = chainings.#index.#index_zero(&data);
+            let chain_result = #validator::execute(extracted_field)?;
+            chainings.#index.#index_one(&mut data, chain_result);
         }
     }
 }
@@ -119,9 +142,9 @@ impl Chaining {
         quote::quote! {
             struct #name;
             impl #name {
-                pub fn chaining() -> (#(#return_type),*) {
+                pub fn chaining() -> (#(#return_type),*,) {
                     (
-                        #(#return_value),*
+                        #(#return_value),*,
                     )
                 }
             }
@@ -136,13 +159,24 @@ impl Chaining {
             validators,
         } = self;
 
+        let mut execute = Vec::new();
+
+        for (index, validator) in validators.iter().enumerate() {
+            execute.push(validator.execute_part(index));
+        }
+
         quote::quote! {
             impl ::sava_chain::ChainExec for #name {
                 type Type = #to_validate;
                 type Error = #error;
 
                 fn execute(input: Self::Type) -> Result<Self::Type, Self::Error> {
+                    let mut data = input;
+                    let chainings = Self::chaining();
 
+                    #(#execute)*
+
+                    Ok(data)
                 }
             }
         }
