@@ -1,6 +1,9 @@
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
-use syn::{bracketed, parenthesized, parse::Parse, parse_macro_input, ExprClosure, Ident, Token};
+use syn::{
+    bracketed, parenthesized, parse::Parse, parse_macro_input, token::Paren, ExprClosure, Ident,
+    Token,
+};
 
 struct ChainingValidator {
     extractor_fn: ExprClosure,
@@ -18,6 +21,10 @@ impl Parse for ChainingValidator {
         let combinator_fn: ExprClosure = inner.parse()?;
         inner.parse::<Token![,]>()?;
         let validator: Ident = inner.parse()?;
+
+        if let (Err(e), true) = (input.parse::<Token![,]>(), input.peek(Paren)) {
+            return Err(e);
+        }
 
         Ok(Self {
             extractor_fn,
@@ -79,7 +86,7 @@ impl Parse for Chaining {
             validators.push(inner.parse()?)
         }
 
-        if let (Err(e), true) = (input.parse::<Token![,]>(), input.peek(Ident)) {
+        if let (Err(e), true) = (input.parse::<Token![,]>(), input.peek(Paren)) {
             return Err(e);
         }
 
