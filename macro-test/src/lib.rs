@@ -46,13 +46,17 @@ impl Chain for SomeDataValidator {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, PartialEq)]
 pub struct ToValidate {
     my_data: String,
+    my_data2: String,
 }
 
 chaining! {
-    (ToValidate, ToError) => MyValidator: [(|struct_data| SomeData(struct_data.my_data.clone()), |struct_data, SomeData(data)| struct_data.my_data = data, SomeDataValidator)],
+    (ToValidate, ToError) => MyValidator: [
+        (|struct_data| SomeData(struct_data.my_data.clone()), |struct_data, SomeData(data)| struct_data.my_data = data, SomeDataValidator),
+        (|struct_data| SomeData(struct_data.my_data2.clone()), |struct_data, SomeData(data)| struct_data.my_data2 = data, SomeDataValidator),
+    ]
 }
 
 #[cfg(test)]
@@ -63,10 +67,29 @@ mod tests {
     fn basic_error() {
         let to_validate = ToValidate {
             my_data: String::from("a   "),
+            my_data2: String::from("   b   "),
         };
 
         let result = MyValidator::execute(to_validate);
 
         assert_eq!(result.unwrap_err(), ToError::Error1(SomeError::Error2))
+    }
+
+    #[test]
+    fn basic_ok() {
+        let to_validate = ToValidate {
+            my_data: String::from("ab   "),
+            my_data2: String::from(" a c b   "),
+        };
+
+        let result = MyValidator::execute(to_validate);
+
+        assert_eq!(
+            result.unwrap(),
+            ToValidate {
+                my_data: String::from("ab"),
+                my_data2: String::from("a c b"),
+            }
+        )
     }
 }
