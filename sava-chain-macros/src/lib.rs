@@ -33,8 +33,8 @@ impl ChainingValidator {
 
         quote::quote! {
             (
-                ::sava_chain::FieldExtractorFn<#to_validate, <#validator as ::sava_chain::Chain>::Type>,
-                ::sava_chain::FieldCombinatorFn<<#validator as ::sava_chain::Chain>::Type, #to_validate>,
+                ::sava_chain::FieldExtractorFn<#to_validate, <#validator as ::sava_chain::ChainExec>::Type>,
+                ::sava_chain::FieldCombinatorFn<<#validator as ::sava_chain::ChainExec>::Type, #to_validate>,
             )
         }
     }
@@ -111,11 +111,9 @@ impl Chaining {
         }
     }
 
-    // pub fn to_chain_exec(self) -> TokenStream2 {
-    //     quote::quote! {
-    //         const _: i8 = 12;
-    //     }
-    // }
+    pub fn chain_exec(self) -> TokenStream2 {
+        quote::quote! {}
+    }
 }
 
 struct Chainings(Vec<Chaining>);
