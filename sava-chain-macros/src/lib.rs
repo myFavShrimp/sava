@@ -2,12 +2,12 @@ use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use syn::{
     bracketed, parenthesized, parse::Parse, parse_macro_input, token::Paren, ExprClosure, Ident,
-    Token,
+    ItemStruct, Token,
 };
 
 struct ChainingValidator {
-    extractor_fn: ExprClosure,
-    combinator_fn: ExprClosure,
+    extractor: ExprClosure,
+    combinator: ExprClosure,
     validator: Ident,
 }
 
@@ -16,9 +16,9 @@ impl Parse for ChainingValidator {
         let inner;
         parenthesized!(inner in input);
 
-        let extractor_fn: ExprClosure = inner.parse()?;
+        let extractor: ExprClosure = inner.parse()?;
         inner.parse::<Token![,]>()?;
-        let combinator_fn: ExprClosure = inner.parse()?;
+        let combinator: ExprClosure = inner.parse()?;
         inner.parse::<Token![,]>()?;
         let validator: Ident = inner.parse()?;
 
@@ -27,57 +27,54 @@ impl Parse for ChainingValidator {
         }
 
         Ok(Self {
-            extractor_fn,
-            combinator_fn,
+            extractor,
+            combinator,
             validator,
         })
     }
 }
 
 impl ChainingValidator {
-    pub fn execute_part(&self, to_validate: &Ident) -> TokenStream2 {
+    pub fn execute_part(&self) -> TokenStream2 {
         let ChainingValidator {
             validator,
-            extractor_fn,
-            combinator_fn,
+            extractor,
+            combinator,
         } = self;
 
         quote::quote! {
-            let extractor_fn: ::sava_chain::FieldExtractorFn<#to_validate, <#validator as ::sava_chain::ChainExec>::Type> = #extractor_fn;
-            let combinator_fn: ::sava_chain::FieldCombinatorFn<<#validator as ::sava_chain::ChainExec>::Type, #to_validate> = #combinator_fn;
+            let extractor: ::sava_chain::FieldExtractorFn<Self, <#validator as ::sava_chain::ChainExec>::Type> = #extractor;
+            let combinator: ::sava_chain::FieldCombinatorFn<<#validator as ::sava_chain::ChainExec>::Type, Self> = #combinator;
 
-            let extracted_field = extractor_fn(&data);
+            let extracted_field = extractor(&data);
             let chain_result = #validator::execute(extracted_field)?;
-            combinator_fn(&mut data, chain_result);
+            combinator(&mut data, chain_result);
         }
     }
 }
 
 struct Chaining {
-    to_validate: Ident,
     error: Ident,
-    name: Ident,
-    validators: Vec<ChainingValidator>,
+    chains: Vec<ChainingValidator>,
+}
+
+mod kw {
+    syn::custom_keyword!(error);
+    syn::custom_keyword!(chains);
 }
 
 impl Parse for Chaining {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let mut validators = Vec::new();
 
-        let (to_validate, error) = {
-            let to_validate_error_pair;
-            parenthesized!(to_validate_error_pair in input);
+        input.parse::<kw::error>()?;
+        input.parse::<Token![=]>()?;
 
-            let to_validate: Ident = to_validate_error_pair.parse()?;
-            to_validate_error_pair.parse::<Token![,]>()?;
-            let error: Ident = to_validate_error_pair.parse()?;
+        let error: Ident = input.parse()?;
 
-            (to_validate, error)
-        };
-
-        input.parse::<Token![=>]>()?;
-        let name: Ident = input.parse()?;
-        input.parse::<Token![:]>()?;
+        input.parse::<Token![,]>()?;
+        input.parse::<kw::chains>()?;
+        input.parse::<Token![=]>()?;
 
         let inner;
         bracketed!(inner in input);
@@ -91,34 +88,29 @@ impl Parse for Chaining {
         }
 
         Ok(Self {
-            to_validate,
             error,
-            name,
-            validators,
+            chains: validators,
         })
     }
 }
 
 impl Chaining {
-    pub fn chain_exec(&self) -> TokenStream2 {
+    pub fn chain_exec(&self, name: Ident) -> TokenStream2 {
         let Chaining {
-            to_validate,
             error,
-            name,
-            validators,
+            chains: validators,
         } = self;
         let validation = self.validate();
 
         let mut execute = Vec::new();
 
         for validator in validators {
-            execute.push(validator.execute_part(&to_validate));
+            execute.push(validator.execute_part());
         }
 
         quote::quote! {
-            pub struct #name;
             impl ::sava_chain::ChainExec for #name {
-                type Type = #to_validate;
+                type Type = Self;
                 type Error = #error;
 
                 fn execute(input: Self::Type) -> Result<Self::Type, Self::Error> {
@@ -136,10 +128,8 @@ impl Chaining {
 
     pub fn validate(&self) -> TokenStream2 {
         let Chaining {
-            to_validate: _,
             error,
-            name: _,
-            validators,
+            chains: validators,
         } = self;
 
         let validator_idents: Vec<&Ident> = validators
@@ -166,29 +156,17 @@ impl Chaining {
     }
 }
 
-struct Chainings(Vec<Chaining>);
+#[proc_macro_attribute]
+pub fn sava(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let chaining = parse_macro_input!(attr as Chaining);
+    let item = parse_macro_input!(item as ItemStruct);
+    let item_name = item.ident.clone();
 
-impl Parse for Chainings {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let mut chainings = Vec::new();
+    let result = chaining.chain_exec(item_name);
 
-        while !input.is_empty() {
-            chainings.push(input.parse()?)
-        }
-
-        Ok(Self(chainings))
+    quote::quote! {
+        #item
+        #result
     }
-}
-
-#[proc_macro]
-pub fn chaining(input: TokenStream) -> TokenStream {
-    let Chainings(chainings) = parse_macro_input!(input as Chainings);
-
-    let mut result = TokenStream2::new();
-
-    for chaining in chainings {
-        result.extend(chaining.chain_exec());
-    }
-
-    result.into()
+    .into()
 }

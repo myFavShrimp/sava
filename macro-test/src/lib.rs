@@ -1,5 +1,5 @@
 use sava_chain::*;
-use sava_chain_macros::chaining;
+use sava_chain_macros::sava;
 use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq)]
@@ -30,7 +30,6 @@ pub enum ToError {
     #[error("Error1")]
     Error1(#[from] SomeError),
 }
-
 pub struct SomeDataValidator;
 
 impl Chain for SomeDataValidator {
@@ -47,16 +46,25 @@ impl Chain for SomeDataValidator {
 }
 
 #[derive(Default, Debug, PartialEq)]
+#[sava(
+    error = ToError,
+    chains = [
+        (
+            |struct_data| SomeData(struct_data.my_data.clone()), 
+            |struct_data, SomeData(data)| struct_data.my_data = data, 
+            SomeDataValidator
+        ),
+        (
+            |struct_data| SomeData(struct_data.my_data2.clone()), 
+            |struct_data, SomeData(data)| struct_data.my_data2 = data, 
+            SomeDataValidator
+        ),
+    ]
+)]
+
 pub struct ToValidate {
     my_data: String,
     my_data2: String,
-}
-
-chaining! {
-    (ToValidate, ToError) => MyValidator: [
-        (|struct_data| SomeData(struct_data.my_data.clone()), |struct_data, SomeData(data)| struct_data.my_data = data, SomeDataValidator),
-        (|struct_data| SomeData(struct_data.my_data2.clone()), |struct_data, SomeData(data)| struct_data.my_data2 = data, SomeDataValidator),
-    ]
 }
 
 #[cfg(test)]
@@ -70,7 +78,7 @@ mod tests {
             my_data2: String::from("   b   "),
         };
 
-        let result = MyValidator::execute(to_validate);
+        let result = ToValidate::execute(to_validate);
 
         assert_eq!(result.unwrap_err(), ToError::Error1(SomeError::Error2))
     }
@@ -82,7 +90,7 @@ mod tests {
             my_data2: String::from(" a c b   "),
         };
 
-        let result = MyValidator::execute(to_validate);
+        let result = ToValidate::execute(to_validate);
 
         assert_eq!(
             result.unwrap(),
